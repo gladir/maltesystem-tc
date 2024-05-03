@@ -1,0 +1,78 @@
+/*********************************************************/
+/*                                                       */
+/*            Malte System/memset function               */
+/*                    1993/06/15                         */
+/*                                                       */
+/*      Copyright (C) par les Chevaliers de Malte        */
+/*                                                       */
+/*********************************************************/
+
+//
+// Programmeur :
+//
+//  Sylvain Maltais
+//
+//
+
+#include <NUMERIC.H>
+
+#ifdef __PASCAL__
+
+ void P_memset(Word SX, Word OX, Word size, LongInt value)
+ {
+  asm CLD;
+  asm MOV ES,SX;
+  asm MOV DI,OX;
+  asm MOV CX,size;
+  #ifdef __386__
+   asm MOV EAX,value;
+   asm MOV BX,CX;
+   asm AND BX,3;
+   asm SHR CX,2;
+   asm REP STOSD;
+   asm MOV CX,BX;
+   asm REP STOSB;
+  #elif __286__
+   asm MOV AL,value;
+   asm MOV AH,AL;
+   asm SHR CX,1;
+   asm REP STOSW;
+   asm ADC CX,CX;
+   asm REP STOSB;
+  #else
+   asm MOV AL,value;
+   asm REP STOSB;
+  #endif
+ }
+
+#else
+
+ void memset(void far *X, Word size, Byte value)
+ {
+  asm CLD;
+  asm LES DI,X;
+  asm MOV CX,size;
+  asm MOV AL,value;
+  #ifdef __386__
+   asm MOV AH,AL;
+   asm PUSH AX;
+   asm PUSH AX;
+   asm POP EAX;
+   asm MOV BX,CX;
+   asm AND BX,3;
+   asm SHR CX,2;
+   asm REP STOSD;
+   asm MOV CX,BX;
+   asm REP STOSB;
+  #elif __286__
+   asm MOV AH,AL;
+   asm SHR CX,1;
+   asm REP STOSW;
+   asm ADC CX,CX;
+   asm REP STOSB;
+  #else
+   asm REP STOSB;
+  #endif
+ }
+
+#endif

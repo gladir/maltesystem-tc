@@ -1,0 +1,188 @@
+/********************************************************/
+/*                                                      */
+/*             Malte System/Volume _GetRecord           */
+/*                     1993/05/14                       */
+/*                                                      */
+/*       Copyright (C) par les Chevaliers de Malte      */
+/*                                                      */
+/********************************************************/
+
+//
+// Programmeur :
+//
+//  Sylvain Maltais
+//
+// Directive de compilation conditionnel :
+//
+//  __286__   Indique que les instructions doivent fonctionner
+//            sur indique 80286.
+//
+//  __386__   Indique que les instructions doivent fonctionner
+//            sur indique 80386.
+//
+
+// ******************************************************
+//                    INTERFACE/HEADER
+// ******************************************************
+
+#include <NUMERIC.H>
+
+typedef Byte VolumeName[32];
+typedef Byte FilePath[64];
+typedef Byte FileName[32];
+typedef Byte FileExt[8];
+typedef Byte FileDescr[64];
+typedef Byte FilePassWord[32];
+typedef Byte PathStr[79];
+
+#ifdef __PASCAL__
+ extern
+#endif
+
+class AVUP
+          {
+           typedef struct VolumeHeader
+                                      {
+                                       Byte         Typing[127];
+                                       Byte         Version;
+                                       VolumeName   VolumeName;
+                                       String       Description;
+                                       FilePassWord PassWord;
+                                      };
+           typedef struct VolumeIndexRecord
+                                           {
+                                            FilePath Path;
+                                            FileName Name;
+                                            FileExt Ext;
+                                            FileDescr Descr;
+                                            Boolean PassWordAuthorized;
+                                            FilePassWord PassWord;
+                                            LongInt Size;
+                                            LongInt LastTime;
+                                            LongInt Time;
+                                            Byte Language;
+                                            Word Category;
+                                            Byte Attribut;
+                                            LongInt Lo,Hi,Pos;
+                                           };
+           public:
+           void _GetRecord(LongInt _Handle, Word Size, const *Buffer);
+           void _SetRecord(LongInt _Handle, Word Size, const *Buffer);
+           void CopyVolumeFileInDOS(LongInt Handle, PathStr Path);
+           void CreateVolume(void);
+           void DeleteVolume(void);
+           void DeleteIndex(LongInt _Handle);
+           void GetHeaderVolume(FilePassWord PassWord, VolumeHeader *Header);
+           void GetIndex(LongInt _Handle, struct VolumeIndexRecord Buffer);
+           void GetRecord(LongInt _Handle, LongInt P, Word Size, const *Buffer);
+     	   void MoveFileDOSInVolume(PathStr Path, VolumeIndexRecord Target);
+  	   void SetHeaderVolume(FilePassWord OldPassWord, VolumeHeader Header);
+           void SetIndex(LongInt _Handle, VolumeIndexRecord Index);
+           void SetPassWord(LongInt _Handle, FilePassWord OldPassWord, FilePassWord PassWord);
+           void SetPassWordVolume(FilePassWord OldPassWord, FilePassWord PassWord);
+           void SetPos(LongInt _Handle, LongInt Pos);
+           void SetRecord(LongInt _Handle, LongInt P, Word Size, const *Buffer);
+           LongInt GetFirstEmptyIndex();
+           LongInt GetMaxIndex();
+           LongInt GetPos(LongInt _Handle);
+           LongInt NewFile(VolumeIndexRecord Info);
+           LongInt Open(VolumeIndexRecord Info);
+           Boolean PosIsUsed(LongInt Pos, LongInt Size);
+           private:
+           Word VHandleIndex;
+           Word VHandleData;
+           Boolean CacheIndex;
+           PathStr PathIndex,PathData;
+          };
+
+// ******************************************************
+//                      IMPLEMENTATION
+// ******************************************************
+
+#include <DOS.H>
+
+extern void SetFilePos(Word _Handle, LongInt P);
+extern void _GetRecord(Word _Handle, Word Size, const *Buffer);
+
+#ifndef AVUP_GETRECORD
+ #define AVUP_GETRECORD
+
+// ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+// ³                   AVUP::_GetRecord                   ³Û
+// ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙÛ
+//  ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+//
+// Description :
+//
+//  þ Cette proc‚dure lit une enregistrement … l'int‚rieur
+//    du volume que l'objet fixe.
+//
+// Note :
+//
+//  þ La version pour 386 prend plus de place, mais … la fin
+//    du compte, vous ˆtes regagnant en rapid‚. Car les
+//    registres du 80386 supporte l'op‚ration sur 32-bits et
+//    il ne faut donc plus calculer en 2 parties.
+//
+
+ #ifdef __386__
+
+  void AVUP::_GetRecord(LongInt _Handle, Word Size, const *Buffer)
+  {
+   struct VolumeIndexRecord Index;
+   LongInt P = Index.Pos, L = Index.Lo;
+   Word VH = VHandleData,
+        _Segment = FP_SEG(&Buffer),
+	_Offset = FP_OFF(&Buffer);
+   asm MOV  AX,VH;
+   asm CMP  AX,0xFFFF;
+   asm JE   Exit_Now;
+   GetIndex(_Handle,Index);
+   asm MOV  EAX,P;
+   asm ADD  EAX,L;
+   asm PUSH EAX;
+   asm POP  DX;
+   asm POP  CX;
+   asm MOV  AX,0x4200;
+   asm MOV  BX,VH;
+   asm INT  0x21;
+   asm PUSH DS;
+   asm POP  ES;
+   asm MOV  AX,0x3F00;
+   asm MOV  CX,Size;
+   asm MOV  DX,_Offset;
+   asm MOV  DS,_Segment;
+   asm INT  0x21;
+   asm PUSH ES;
+   asm POP  DS;
+Exit_Now:;
+  }
+
+ #else
+
+  void AVUP::_GetRecord(LongInt _Handle, Word Size, const *Buffer)
+  {
+   struct VolumeIndexRecord Index;
+   LongInt P = Index.Pos, L = Index.Lo;
+   Word VH = VHandleData,
+        _Segment = FP_SEG(&Buffer),
+	_Offset = FP_OFF(&Buffer);
+   if(VHandleIndex != -1)
+   {
+    GetIndex(_Handle,Index);
+    SetFilePos(VHandleData,Index.Pos + Index.Lo);
+    asm PUSH DS;
+    asm POP  ES;
+    asm MOV  AX,0x3F00;
+    asm MOV  CX,Size;
+    asm MOV  DX,_Offset;
+    asm MOV  DS,_Segment;
+    asm INT  0x21;
+    asm PUSH ES;
+    asm POP  DS;
+   }
+  }
+
+ #endif
+
+#endif

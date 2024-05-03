@@ -1,0 +1,72 @@
+/********************************************************/
+/*                                                      */
+/*            Malte System/Absolute Max X               */
+/*                    1993/05/14                        */
+/*                                                      */
+/*      Copyright (C) par les Chevaliers de Malte       */
+/*                                                      */
+/********************************************************/
+
+//
+// Programmeur :
+//
+//  Sylvain Maltais
+//
+// Compatible :
+//
+//  Turbo Pascal 4.xx ou post‚rieur,
+//  Turbo C++ ou post‚rieur.
+//
+// DerniŠre modification :
+//
+//  Vendredi, le 14 mai 1993   (Addition : AbsMaxX).
+//
+// Directive de compilation conditionnel :
+//
+//  __386__    Compile en instruction 80386.
+//
+
+// *******************************************************
+//                    INTERFACE/HEADER
+// *******************************************************
+
+#include <NUMERIC.H>
+
+extern LongInt AbsMaxX(LongInt Value,LongInt X);
+
+// *******************************************************
+//                     IMPLEMENTATION
+// *******************************************************
+
+#ifndef __ABSMAXX__
+ #define __ABSMAXX__
+
+ #ifdef __386__
+
+  LongInt AbsMaxX(LongInt Value,LongInt X)
+  {
+   asm MOV  EAX,X;
+   asm MOV  EBX,Value;
+   asm CMP  EBX,EAX;
+   asm JG   TooBig;
+   asm PUSH EBX;    // Empile la registre ‚tendu sur 32-bits
+   asm POP  AX;     // D‚sempile la partie base
+   asm POP  BX;     // D‚sempile la partie haute
+   return((_BX << 16) + _AX);
+TooBig:
+   asm PUSH EAX;    // Empile la registre ‚tendu sur 32-bits
+   asm POP  AX;     // D‚sempile la partie base
+   asm POP  BX;     // D‚sempile la partie haute
+   return((_BX << 16) + _AX);
+  }
+
+ #else
+
+  LongInt AbsMaxX(LongInt Value, LongInt X)
+  {
+   return(Value > X ? X : Value);
+  }
+
+ #endif
+
+#endif
